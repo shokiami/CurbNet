@@ -128,7 +128,17 @@ def get_sv_coords(label_metadata):
 
     return round(final_point[0]), round(final_point[1])
 
-def multi_download_panos(pano_ids):
+def download_panos(pano_ids):
+    print("downloading panos...")
+    start_time = perf_counter()
+    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
+    for i in range(num_batches):
+        # download batch from SFTP server
+        batch_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
+        print(f"batch {i + 1}/{num_batches}: {perf_counter() - start_time}")
+    print("panos downloaded!")
+
+def batch_download_panos(pano_ids):
     if not os.path.isdir(BATCH_TXT_DIR):
         os.makedirs(BATCH_TXT_DIR)
     
@@ -140,7 +150,7 @@ def multi_download_panos(pano_ids):
     processes = []
     chunk_size = math.ceil(len(pano_ids) / cpu_count)
     for i in range(cpu_count):
-        process = mp.Process(target=download_panos, args=(pano_ids[i * chunk_size : (i + 1) * chunk_size], i))
+        process = mp.Process(target=thread_download_panos, args=(pano_ids[i * chunk_size : (i + 1) * chunk_size], i))
         processes.append(process)
 
     # start processes
@@ -156,7 +166,7 @@ def multi_download_panos(pano_ids):
         os.remove(file.path)
     os.rmdir(BATCH_TXT_DIR)
 
-def download_panos(pano_ids, thread_id):
+def thread_download_panos(pano_ids, thread_id):
     sftp_command_list = ["cd {}".format(f"sidewalk_panos/Panoramas/scrapes_dump_{CITY}"), "lcd {}".format(PANOS_DIR)]
 
     # create collection of commands
@@ -179,18 +189,22 @@ def download_panos(pano_ids, thread_id):
         print("sftp failed on one or more commands: {0}".format(sftp_command_list))
 
 if __name__ ==  "__main__":
+    # create empty panos dir
     if os.path.isdir(PANOS_DIR):
         shutil.rmtree(PANOS_DIR)
     os.makedirs(PANOS_DIR)
     
-    # labels_df = pd.read_csv("seattle_labels.csv")
+    # download labels
     labels_df = get_labels()
-
     # filter for curb ramps
     labels_df = labels_df[labels_df["label_type_id"] == 1]
-    # filter out labels from panos with misnp.sing pano metadata
+    # filter out labels with missing metadata
     labels_df = labels_df.dropna()
+    # save labels csv
+    labels_df.to_csv(f"{CITY}_labels.csv", index=False)
+    # labels_df = pd.read_csv("seattle_labels.csv")
 
+    # map pano_ids to a list of label coords
     pano_labels = {}
     for _, row in labels_df.iterrows():
         pano_id = row["gsv_panorama_id"]
@@ -198,20 +212,13 @@ if __name__ ==  "__main__":
             pano_labels[pano_id] = []
         pano_labels[pano_id].append(get_sv_coords(row))
 
-    panos_df = pd.DataFrame(sorted(pano_labels.items(), key=lambda item: len(item[1]), reverse=True), columns=["pano_id", "labels"])
-
+    # convert to map to df
+    panos_df = pd.DataFrame(pano_labels.items(), columns=["pano_id", "labels"])
+    # truncate panos
     panos_df = panos_df.head(NUM_PANOS)
+    # save panos csv
+    panos_df.to_csv(f"{CITY}_panos.csv", index=False)
 
-    panos_df.to_csv(f"{PANOS_DIR}/{CITY}_panos.csv", index=False)
-
-    pano_ids = panos_df["pano_id"].to_numpy()
-
-    start_time = perf_counter()
-    print("downloading panos...")
-    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
-    for i in range(num_batches):
-        # download batch from SFTP server
-        multi_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
-        print(f"batch {i + 1}/{num_batches}: {perf_counter() - start_time}")
-
-    print("panos downloaded!")
+    # get list of pano ids and then download
+    pano_ids = panos_df["pano_id"].to_list()
+    download_panos(pano_ids)
