@@ -10,52 +10,36 @@ import subprocess
 from subprocess import DEVNULL, STDOUT
 from time import perf_counter
 
-NUM_PANOS = 10000
-PANOS_DIR = "panos/"
-CITY = "seattle"
 SIDEWALK_API_ENDPOINT = "sidewalk-sea.cs.washington.edu"
+CITY = "seattle"
+PANOS_DIR = "panos/"
+NUM_PANOS = 10000
 
 BATCH_SIZE = 100
 BATCH_TXT_DIR = "batches/"
 
 SFTP_KEY_PATH = "sftp_key"
 
+start_time = 0
+
 def download_labels_df():
     conn = http.client.HTTPSConnection(SIDEWALK_API_ENDPOINT)
     conn.request("GET", "/adminapi/labels/cvMetadata")
     response = conn.getresponse()
+
     while response.status != 200:
         conn = http.client.HTTPSConnection(SIDEWALK_API_ENDPOINT)
         conn.request("GET", "/adminapi/labels/cvMetadata")
         response = conn.getresponse()
+    
     data = response.read()
     pano_info = json.loads(data)
-    # Structure of JSON data
-    # [
-    #     {
-    #         "label_id":47614,
-    #         "gsv_panorama_id":"sHMY67LdNX48BFwpbGMD3A",
-    #         "label_type_id":2,
-    #         "agree_count":1,
-    #         "disagree_count":0,
-    #         "notsure_count":0,
-    #         "image_width":16384,
-    #         "image_height":8192,
-    #         "sv_image_x":6538,
-    #         "sv_image_y":-731,
-    #         "canvas_width":720,
-    #         "canvas_height":480,
-    #         "canvas_x":275,
-    #         "canvas_y":152,
-    #         "zoom":1,
-    #         "heading":190.25,
-    #         "pitch":-34.4375,
-    #         "photographer_heading":292.4190368652344,
-    #         "photographer_pitch":-3.3052749633789062
-    #     },
-    #     ...
-    # ]
-    return pd.DataFrame.from_records(pano_info)
+    labels_df = pd.DataFrame.from_records(pano_info)
+
+    labels_df = labels_df[labels_df["label_type_id"] == 1]
+    labels_df = labels_df.dropna()
+    
+    return labels_df
 
 def create_panos_df(labels_df):
     pano_labels = {}
@@ -139,13 +123,19 @@ def get_sv_coords(label_metadata):
 
     return round(final_point[0]), round(final_point[1])
 
-def download_panos(pano_ids):
+def download_panos(panos_df):
+    pano_ids = panos_df["pano_id"].to_list()
+    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
+    for i in range(num_batches):
+        batch_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
+        print(f"batch {i + 1}/{num_batches}: {int(perf_counter() - start_time)}s")
+
+def batch_download_panos(pano_ids):
     if not os.path.isdir(BATCH_TXT_DIR):
         os.makedirs(BATCH_TXT_DIR)
 
     cpu_count = mp.cpu_count() if mp.cpu_count() <= 8 else 8
 
-    i = 0
     processes = []
     chunk_size = math.ceil(len(pano_ids) / cpu_count)
     for i in range(cpu_count):
@@ -190,8 +180,6 @@ if __name__ ==  "__main__":
     
     print(f"downloading {CITY}_labels.csv...")
     labels_df = download_labels_df()
-    labels_df = labels_df[labels_df["label_type_id"] == 1]
-    labels_df = labels_df.dropna()
     labels_df.to_csv(f"{CITY}_labels.csv", index=False)
     print(f"downloaded {CITY}_labels.csv: {int(perf_counter() - start_time)}s")
     # labels_df = pd.read_csv("seattle_labels.csv")
@@ -203,9 +191,5 @@ if __name__ ==  "__main__":
     # panos_df = pd.read_csv("seattle_panos.csv")
 
     print(f"downloading panos to {PANOS_DIR}...")
-    pano_ids = panos_df["pano_id"].to_list()
-    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
-    for i in range(num_batches):
-        download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
-        print(f"batch {i + 1}/{num_batches}: {int(perf_counter() - start_time)}s")
+    download_panos(panos_df)
     print(f"total time: {int(perf_counter() - start_time)}s")
