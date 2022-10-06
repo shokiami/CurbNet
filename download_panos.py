@@ -15,13 +15,12 @@ PANOS_DIR = "panos/"
 CITY = "seattle"
 SIDEWALK_API_ENDPOINT = "sidewalk-sea.cs.washington.edu"
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 100
 BATCH_TXT_DIR = "batches/"
 
 SFTP_KEY_PATH = "sftp_key"
 
-def get_labels():
-    print("downloading label csv...")
+def get_labels_df():
     conn = http.client.HTTPSConnection(SIDEWALK_API_ENDPOINT)
     conn.request("GET", "/adminapi/labels/cvMetadata")
     response = conn.getresponse()
@@ -29,7 +28,6 @@ def get_labels():
         conn = http.client.HTTPSConnection(SIDEWALK_API_ENDPOINT)
         conn.request("GET", "/adminapi/labels/cvMetadata")
         response = conn.getresponse()
-    print("label csv downloaded!")
     data = response.read()
     pano_info = json.loads(data)
     # Structure of JSON data
@@ -58,6 +56,22 @@ def get_labels():
     #     ...
     # ]
     return pd.DataFrame.from_records(pano_info)
+
+def get_panos_df():
+    # map pano_ids to a list of label coords
+    pano_labels = {}
+    for _, row in labels_df.iterrows():
+        pano_id = row["gsv_panorama_id"]
+        if not pano_id in pano_labels:
+            pano_labels[pano_id] = []
+        pano_labels[pano_id].append(get_sv_coords(row))
+
+    # convert to map to df
+    panos_df = pd.DataFrame(pano_labels.items(), columns=["pano_id", "labels"])
+    # truncate panos
+    panos_df = panos_df.head(NUM_PANOS)
+    return panos_df
+
 
 def get_sv_coords(label_metadata):
     image_width = label_metadata["image_width"]
@@ -129,14 +143,12 @@ def get_sv_coords(label_metadata):
     return round(final_point[0]), round(final_point[1])
 
 def download_panos(pano_ids):
-    print("downloading panos...")
     start_time = perf_counter()
     num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
     for i in range(num_batches):
         # download batch from SFTP server
         batch_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
-        print(f"batch {i + 1}/{num_batches}: {perf_counter() - start_time}")
-    print("panos downloaded!")
+        print(f"batch {i + 1}/{num_batches}: {int(perf_counter() - start_time)}s")
 
 def batch_download_panos(pano_ids):
     if not os.path.isdir(BATCH_TXT_DIR):
@@ -194,31 +206,28 @@ if __name__ ==  "__main__":
         shutil.rmtree(PANOS_DIR)
     os.makedirs(PANOS_DIR)
     
-    # download labels
-    labels_df = get_labels()
+    print(f"downloading {CITY}_labels.csv...")
+    # download labels dataframe from api endpoint
+    labels_df = get_labels_df()
     # filter for curb ramps
     labels_df = labels_df[labels_df["label_type_id"] == 1]
     # filter out labels with missing metadata
     labels_df = labels_df.dropna()
     # save labels csv
     labels_df.to_csv(f"{CITY}_labels.csv", index=False)
+    print(f"done!")
     # labels_df = pd.read_csv("seattle_labels.csv")
 
-    # map pano_ids to a list of label coords
-    pano_labels = {}
-    for _, row in labels_df.iterrows():
-        pano_id = row["gsv_panorama_id"]
-        if not pano_id in pano_labels:
-            pano_labels[pano_id] = []
-        pano_labels[pano_id].append(get_sv_coords(row))
-
-    # convert to map to df
-    panos_df = pd.DataFrame(pano_labels.items(), columns=["pano_id", "labels"])
-    # truncate panos
-    panos_df = panos_df.head(NUM_PANOS)
+    print(f"creating {CITY}_panos.csv...")
+    # create panos dataframe from labels dataframe
+    panos_df = get_panos_df()
     # save panos csv
     panos_df.to_csv(f"{CITY}_panos.csv", index=False)
+    print(f"done!")
 
-    # get list of pano ids and then download
+    print(f"downloading panos to {PANOS_DIR}...")
+    # get list of pano ids to download
     pano_ids = panos_df["pano_id"].to_list()
+    # download panos from sftp server
     download_panos(pano_ids)
+    print(f"done!")
