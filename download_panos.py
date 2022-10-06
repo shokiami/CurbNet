@@ -10,7 +10,7 @@ import subprocess
 from subprocess import DEVNULL, STDOUT
 from time import perf_counter
 
-NUM_PANOS = 10
+NUM_PANOS = 10000
 PANOS_DIR = "panos/"
 CITY = "seattle"
 SIDEWALK_API_ENDPOINT = "sidewalk-sea.cs.washington.edu"
@@ -224,6 +224,7 @@ if __name__ ==  "__main__":
     # save panos csv
     panos_df.to_csv(f"{CITY}_panos.csv", index=False)
     print(f"done!")
+    # panos_df = pd.read_csv("seattle_panos.csv")
 
     print(f"downloading panos to {PANOS_DIR}...")
     # get list of pano ids to download
