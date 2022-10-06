@@ -20,7 +20,7 @@ BATCH_TXT_DIR = "batches/"
 
 SFTP_KEY_PATH = "sftp_key"
 
-def get_labels_df():
+def download_labels_df():
     conn = http.client.HTTPSConnection(SIDEWALK_API_ENDPOINT)
     conn.request("GET", "/adminapi/labels/cvMetadata")
     response = conn.getresponse()
@@ -57,8 +57,7 @@ def get_labels_df():
     # ]
     return pd.DataFrame.from_records(pano_info)
 
-def get_panos_df():
-    # map pano_ids to a list of label coords
+def create_panos_df(labels_df):
     pano_labels = {}
     for _, row in labels_df.iterrows():
         pano_id = row["gsv_panorama_id"]
@@ -66,12 +65,10 @@ def get_panos_df():
             pano_labels[pano_id] = []
         pano_labels[pano_id].append(get_sv_coords(row))
 
-    # convert to map to df
     panos_df = pd.DataFrame(pano_labels.items(), columns=["pano_id", "labels"])
-    # truncate panos
     panos_df = panos_df.head(NUM_PANOS)
+    
     return panos_df
-
 
 def get_sv_coords(label_metadata):
     image_width = label_metadata["image_width"]
@@ -143,21 +140,11 @@ def get_sv_coords(label_metadata):
     return round(final_point[0]), round(final_point[1])
 
 def download_panos(pano_ids):
-    start_time = perf_counter()
-    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
-    for i in range(num_batches):
-        # download batch from SFTP server
-        batch_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
-        print(f"batch {i + 1}/{num_batches}: {int(perf_counter() - start_time)}s")
-
-def batch_download_panos(pano_ids):
     if not os.path.isdir(BATCH_TXT_DIR):
         os.makedirs(BATCH_TXT_DIR)
-    
-    # get available cpu_count
+
     cpu_count = mp.cpu_count() if mp.cpu_count() <= 8 else 8
 
-    # split pano_ids into chunks for multithreading
     i = 0
     processes = []
     chunk_size = math.ceil(len(pano_ids) / cpu_count)
@@ -165,15 +152,12 @@ def batch_download_panos(pano_ids):
         process = mp.Process(target=thread_download_panos, args=(pano_ids[i * chunk_size : (i + 1) * chunk_size], i))
         processes.append(process)
 
-    # start processes
     for p in processes:
         p.start()
 
-    # join processes once finished
     for p in processes:
         p.join()
 
-    # remove batch txts
     for file in os.scandir(BATCH_TXT_DIR):
         os.remove(file.path)
     os.rmdir(BATCH_TXT_DIR)
@@ -181,11 +165,8 @@ def batch_download_panos(pano_ids):
 def thread_download_panos(pano_ids, thread_id):
     sftp_command_list = ["cd {}".format(f"sidewalk_panos/Panoramas/scrapes_dump_{CITY}"), "lcd {}".format(PANOS_DIR)]
 
-    # create collection of commands
     for pano_id in pano_ids:
-        # get first two characters of pano id
         two_chars = pano_id[:2]
-        # get jpg for pano id
         sftp_command_list.append("-get ./{prefix}/{full_id}.jpg".format(prefix=two_chars, full_id=pano_id))
 
     thread_batch_txt = f"{BATCH_TXT_DIR}/batch{thread_id}.text"
@@ -201,34 +182,30 @@ def thread_download_panos(pano_ids, thread_id):
         print("sftp failed on one or more commands: {0}".format(sftp_command_list))
 
 if __name__ ==  "__main__":
-    # create empty panos dir
+    start_time = perf_counter()
+
     if os.path.isdir(PANOS_DIR):
         shutil.rmtree(PANOS_DIR)
     os.makedirs(PANOS_DIR)
     
     print(f"downloading {CITY}_labels.csv...")
-    # download labels dataframe from api endpoint
-    labels_df = get_labels_df()
-    # filter for curb ramps
+    labels_df = download_labels_df()
     labels_df = labels_df[labels_df["label_type_id"] == 1]
-    # filter out labels with missing metadata
     labels_df = labels_df.dropna()
-    # save labels csv
     labels_df.to_csv(f"{CITY}_labels.csv", index=False)
-    print(f"done!")
+    print(f"downloaded {CITY}_labels.csv: {int(perf_counter() - start_time)}s")
     # labels_df = pd.read_csv("seattle_labels.csv")
 
     print(f"creating {CITY}_panos.csv...")
-    # create panos dataframe from labels dataframe
-    panos_df = get_panos_df()
-    # save panos csv
+    panos_df = create_panos_df(labels_df)
     panos_df.to_csv(f"{CITY}_panos.csv", index=False)
-    print(f"done!")
+    print(f"created {CITY}_panos.csv: {int(perf_counter() - start_time)}s")
     # panos_df = pd.read_csv("seattle_panos.csv")
 
     print(f"downloading panos to {PANOS_DIR}...")
-    # get list of pano ids to download
     pano_ids = panos_df["pano_id"].to_list()
-    # download panos from sftp server
-    download_panos(pano_ids)
-    print(f"done!")
+    num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
+    for i in range(num_batches):
+        download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
+        print(f"batch {i + 1}/{num_batches}: {int(perf_counter() - start_time)}s")
+    print(f"total time: {int(perf_counter() - start_time)}s")
