@@ -13,7 +13,7 @@ from time import perf_counter
 SIDEWALK_API_ENDPOINT = "sidewalk-sea.cs.washington.edu"
 CITY = "seattle"
 PANOS_DIR = "panos/"
-NUM_PANOS = 10000
+NUM_PANOS = 10
 
 BATCH_SIZE = 100
 BATCH_TXT_DIR = "batches/"
@@ -123,8 +123,7 @@ def get_sv_coords(label_metadata):
 
     return round(final_point[0]), round(final_point[1])
 
-def download_panos(panos_df):
-    pano_ids = panos_df["pano_id"].to_list()
+def download_panos(pano_ids):
     num_batches = math.ceil(NUM_PANOS / BATCH_SIZE)
     for i in range(num_batches):
         batch_download_panos(pano_ids[i * BATCH_SIZE : (i + 1) * BATCH_SIZE])
@@ -178,18 +177,16 @@ if __name__ ==  "__main__":
         shutil.rmtree(PANOS_DIR)
     os.makedirs(PANOS_DIR)
     
-    print(f"downloading {CITY}_labels.csv...")
+    print("downloading labels...")
     labels_df = download_labels_df()
-    labels_df.to_csv(f"{CITY}_labels.csv", index=False)
-    print(f"downloaded {CITY}_labels.csv: {int(perf_counter() - start_time)}s")
-    # labels_df = pd.read_csv("seattle_labels.csv")
+    print(f"downloaded labels: {int(perf_counter() - start_time)}s")
 
-    print(f"creating {CITY}_panos.csv...")
+    print("creating panos csv...")
     panos_df = create_panos_df(labels_df)
     panos_df.to_csv(f"{CITY}_panos.csv", index=False)
-    print(f"created {CITY}_panos.csv: {int(perf_counter() - start_time)}s")
-    # panos_df = pd.read_csv("seattle_panos.csv")
+    print(f"created panos csv: {int(perf_counter() - start_time)}s")
 
-    print(f"downloading panos to {PANOS_DIR}...")
-    download_panos(panos_df)
+    print("downloading panos...")
+    pano_ids = panos_df["pano_id"].to_list()
+    download_panos(pano_ids)
     print(f"total time: {int(perf_counter() - start_time)}s")
