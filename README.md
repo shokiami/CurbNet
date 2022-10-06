@@ -4,5 +4,5 @@ Welcome to CurbNet!
 
 Download GSV panoramas:
 ```
-python3 main.py
+python3 download_panos.py
 ```
