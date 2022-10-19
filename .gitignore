@@ -4,3 +4,4 @@ sftp_key
 panos/*
 *.csv
 batches/*
+examples/*

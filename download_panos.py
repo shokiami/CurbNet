@@ -171,6 +171,7 @@ def thread_download_panos(pano_ids, thread_id):
         print("sftp failed on one or more commands: {0}".format(sftp_command_list))
 
 if __name__ ==  "__main__":
+    exit()
     start_time = perf_counter()
 
     if os.path.isdir(PANOS_DIR):
@@ -179,6 +180,7 @@ if __name__ ==  "__main__":
     
     print("downloading labels...")
     labels_df = download_labels_df()
+    labels_df.to_csv(f"{CITY}_labels.csv", index=False)
     print(f"downloaded labels: {int(perf_counter() - start_time)}s")
 
     print("creating panos csv...")

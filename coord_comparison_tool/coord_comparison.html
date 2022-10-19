@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href="coord_comparison.css" rel="stylesheet">
+  </head>
+  <body>
+    <div id="pano-streetview-container">
+      <img id="pano" src="../confmap_pano.jpg" />
+      <div id="streetview"></div>
+      <div id="overlay"></div>
+    </div>
+    <form id="myForm">
+      <input type="file" id="csvFile" accept=".csv" />
+      <input type="submit" value="Submit" />
+    </form>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script type="text/JavaScript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-csv/0.71/jquery.csv-0.71.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="coord_comparison.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&callback=main&v=weekly&channel=2"></script>
+  </body>
+</html>
