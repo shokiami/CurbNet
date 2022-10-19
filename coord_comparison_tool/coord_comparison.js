@@ -1,49 +1,73 @@
-var panorama;
-var label_data = [];
+let panorama;
+let label_data = [];
+let label_data_index = -1;
+const labelsForm = document.getElementById("labelsForm");
+const panosForm = document.getElementById("panosForm");
+const labelsCSV = document.getElementById("labelsCSV");
+const panosCSV = document.getElementById("panosCSV");
+const panoImage = document.getElementById("pano");
+const pano_ids = new Set();
 
+panoImage.addEventListener("click", function (e) {
+  current_data = label_data[label_data_index];
+  current_data.actual_x = e.clientX;
+  current_data.actual_y = e.clientY;
+  update();
+});
+
+labelsForm.addEventListener("submit", function (e) {
+  e.preventDefault();
+  const iMathut = labelsCSV.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const text = e.target.result;
+    let csv_label_data = d3.csvParse(text);
+    load_label_data(csv_label_data);
+  };
+
+  reader.readAsText(iMathut);
+});
+
+panosForm.addEventListener("submit", function (e) {
+  e.preventDefault();
+  const iMathut = panosCSV.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const text = e.target.result;
+    let csv_pano_data = d3.csvParse(text);
+    for (const data of csv_pano_data) {
+      pano_ids.add(data.pano_id);
+    }
+  };
+
+  reader.readAsText(iMathut);
+});
 function main() {
-  const myForm = document.getElementById("myForm");
-  const csvFile = document.getElementById("csvFile");
-
-  myForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    const iMathut = csvFile.files[0];
-    const reader = new FileReader();
-
-    reader.onload = function (e) {
-      const text = e.target.result;
-      let csv_label_data = d3.csvParse(text);
-      load_label_data(csv_label_data);
-    };
-
-    reader.readAsText(iMathut);
-  });
-
   panorama = new google.maps.StreetViewPanorama(
     document.getElementById("streetview"),
     {
       pano: "EJ9gACh3lHF56-vu8I437g",
     }
   );
-  // panorama.setPov({
-  //   pitch: 0,
-  //   heading: 0,
-  // });
 }
 
 function load_label_data(csv_label_data) {
   for (let label_metadata of csv_label_data) {
     let [calculated_x, calculated_y] = calculate_coords(label_metadata);
     label_data.push({
-      "label_id": label_metadata["label_id"],
-      "panorama_id": label_metadata["gsv_panorama_id"],
-      "calculated_x": calculated_x,
-      "calculated_y": calculated_y,
-      "actual_x": null,
-      "actual_y": null
+      label_id: label_metadata["label_id"],
+      panorama_id: label_metadata["gsv_panorama_id"],
+      pitch: parseFloat(label_metadata["pitch"]),
+      heading: parseFloat(label_metadata["heading"]),
+      calculated_x: calculated_x,
+      calculated_y: calculated_y,
+      actual_x: null,
+      actual_y: null,
     });
   }
-  console.log(label_data);
+  update();
 }
 
 function calculate_coords(label_metadata) {
@@ -58,14 +82,14 @@ function calculate_coords(label_metadata) {
   let pitch = parseFloat(label_metadata["pitch"]);
   let photographer_heading = parseFloat(label_metadata["photographer_heading"]);
   let photographer_pitch = parseFloat(label_metadata["photographer_pitch"]);
-  let h0 = heading * Math.PI / 180.0;
-  let p0 = pitch * Math.PI / 180.0;
-  let fov = 126.5 - (zoom * 36.75);
+  let h0 = (heading * Math.PI) / 180.0;
+  let p0 = (pitch * Math.PI) / 180.0;
+  let fov = 126.5 - zoom * 36.75;
   if (zoom > 2) {
-    fov = 195.93 / (1.92 ** zoom);
+    fov = 195.93 / 1.92 ** zoom;
   }
   fov *= Math.PI / 180.0;
-  let f = 0.5 * canvas_width / Math.tan(0.5 * fov);
+  let f = (0.5 * canvas_width) / Math.tan(0.5 * fov);
   let x0 = f * Math.cos(p0) * Math.sin(h0);
   let y0 = f * Math.cos(p0) * Math.cos(h0);
   let z0 = f * Math.sin(p0);
@@ -83,13 +107,22 @@ function calculate_coords(label_metadata) {
   let R = Math.sqrt(x * x + y * y + z * z);
   let h = Math.atan2(x, y);
   let p = Math.asin(z / R);
-  heading = h * 180.0 / Math.PI;
-  pitch = p * 180.0 / Math.PI;
-  let horizontal_scale = 2 * Math.PI / image_width;
-  let amplitude = photographer_pitch * image_height / 180;
-  let original_x = (Math.round((heading - photographer_heading) / 180 * image_width / 2 + image_width / 2) + image_width) % image_width;
-  let original_y = Math.round(image_height / 2 + amplitude * Math.cos(horizontal_scale * original_x));
-  let cosine_slope = amplitude * -Math.sin(horizontal_scale * original_x) * horizontal_scale;
+  heading = (h * 180.0) / Math.PI;
+  pitch = (p * 180.0) / Math.PI;
+  let horizontal_scale = (2 * Math.PI) / image_width;
+  let amplitude = (photographer_pitch * image_height) / 180;
+  let original_x =
+    (Math.round(
+      (((heading - photographer_heading) / 180) * image_width) / 2 +
+        image_width / 2
+    ) +
+      image_width) %
+    image_width;
+  let original_y = Math.round(
+    image_height / 2 + amplitude * Math.cos(horizontal_scale * original_x)
+  );
+  let cosine_slope =
+    amplitude * -Math.sin(horizontal_scale * original_x) * horizontal_scale;
   let offset_x = 0;
   let offset_y = 1;
   if (cosine_slope != 0) {
@@ -104,8 +137,30 @@ function calculate_coords(label_metadata) {
   let offset_norm = Math.sqrt(offset_x * offset_x + offset_y * offset_y);
   let normalized_offset_x = offset_x / offset_norm;
   let normalized_offset_y = offset_y / offset_norm;
-  let offset_vec_scalar = -pitch / 180 * image_height;
+  let offset_vec_scalar = (-pitch / 180) * image_height;
   let finalized_offset_x = normalized_offset_x * offset_vec_scalar;
   let finalized_offset_y = normalized_offset_y * offset_vec_scalar;
-  return [Math.round(original_x + finalized_offset_x), Math.round(original_y + finalized_offset_y)];
+  return [
+    Math.round(original_x + finalized_offset_x),
+    Math.round(original_y + finalized_offset_y),
+  ];
+}
+
+function update() {
+  label_data_index += 1;
+  new_data = label_data[label_data_index];
+  if (pano_ids.has(new_data.panorama_id)) {
+  }
+  console.log(new_data);
+  panoImage.src = `../panos/${new_data.panorama_id}.jpg`;
+  panorama = new google.maps.StreetViewPanorama(
+    document.getElementById("streetview"),
+    {
+      pov: {
+        heading: new_data.heading,
+        pitch: new_data.pitch,
+      },
+      pano: "WFspOAqlMn7usEgPJLRDhA",
+    }
+  );
 }
