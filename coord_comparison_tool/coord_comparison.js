@@ -149,18 +149,20 @@ function calculate_coords(label_metadata) {
 function update() {
   label_data_index += 1;
   new_data = label_data[label_data_index];
+  // not sure how to check if street view can serve pano
   if (pano_ids.has(new_data.panorama_id)) {
+    panoImage.src = `../panos/${new_data.panorama_id}.jpg`;
+    panorama = new google.maps.StreetViewPanorama(
+      document.getElementById("streetview"),
+      {
+        pov: {
+          heading: new_data.heading,
+          pitch: new_data.pitch,
+        },
+        pano: new_data.panorama_id,
+      }
+    );
+  } else {
+    update();
   }
-  console.log(new_data);
-  panoImage.src = `../panos/${new_data.panorama_id}.jpg`;
-  panorama = new google.maps.StreetViewPanorama(
-    document.getElementById("streetview"),
-    {
-      pov: {
-        heading: new_data.heading,
-        pitch: new_data.pitch,
-      },
-      pano: "WFspOAqlMn7usEgPJLRDhA",
-    }
-  );
 }
