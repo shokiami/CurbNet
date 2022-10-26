@@ -1,18 +1,32 @@
 let panorama;
 let label_data = [];
-let label_data_index = -1;
+let label_data_index = 0;
 const labelsForm = document.getElementById("labelsForm");
 const panosForm = document.getElementById("panosForm");
 const labelsCSV = document.getElementById("labelsCSV");
 const panosCSV = document.getElementById("panosCSV");
 const panoImage = document.getElementById("pano");
+const calculatedLabel = document.getElementById("calculatedLabel");
+const placedLabel = document.getElementById("placedLabel");
+const nextButton = document.getElementById("next");
+const prevButton = document.getElementById("prev");
+const printButton = document.getElementById("print");
 const pano_ids = new Set();
 
 panoImage.addEventListener("click", function (e) {
   current_data = label_data[label_data_index];
-  current_data.actual_x = e.clientX;
-  current_data.actual_y = e.clientY;
-  update();
+  current_data.actual_x =
+    (parseFloat(e.clientX) / panoImage.width) * current_data.width;
+  current_data.actual_y =
+    (parseFloat(e.clientY) / panoImage.height) * current_data.height;
+  current_data.error_in_pixels = Math.sqrt(
+    (current_data.actual_x - current_data.calculated_x) *
+      (current_data.actual_x - current_data.calculated_x) +
+      (current_data.actual_y - current_data.calculated_y) *
+        (current_data.actual_y - current_data.calculated_y)
+  );
+  placedLabel.style.marginLeft = e.clientX + "px";
+  placedLabel.style.marginTop = e.clientY + "px";
 });
 
 labelsForm.addEventListener("submit", function (e) {
@@ -27,6 +41,23 @@ labelsForm.addEventListener("submit", function (e) {
   };
 
   reader.readAsText(iMathut);
+});
+printButton.addEventListener("click", function (e) {
+  let result = "";
+  for (const field in label_data[0]) {
+    result += `${field},`;
+  }
+  result += "\n";
+  for (const data of label_data) {
+    if (data.actual_x && data.actual_y) {
+      console.log(data);
+      for (const field in data) {
+        result += `${data[field]},`;
+      }
+      result += "\n";
+    }
+  }
+  // console.log(result);
 });
 
 panosForm.addEventListener("submit", function (e) {
@@ -59,15 +90,17 @@ function load_label_data(csv_label_data) {
     label_data.push({
       label_id: label_metadata["label_id"],
       panorama_id: label_metadata["gsv_panorama_id"],
-      pitch: parseFloat(label_metadata["pitch"]),
-      heading: parseFloat(label_metadata["heading"]),
+      label_pitch: parseFloat(label_metadata["label_pitch"]),
+      label_heading: parseFloat(label_metadata["label_heading"]),
       calculated_x: calculated_x,
       calculated_y: calculated_y,
       actual_x: null,
       actual_y: null,
+      width: label_metadata["image_width"],
+      height: label_metadata["image_height"],
+      error_in_pixels: null,
     });
   }
-  update();
 }
 
 function calculate_coords(label_metadata) {
@@ -108,7 +141,9 @@ function calculate_coords(label_metadata) {
   let h = Math.atan2(x, y);
   let p = Math.asin(z / R);
   heading = (h * 180.0) / Math.PI;
+  label_metadata["label_heading"] = heading;
   pitch = (p * 180.0) / Math.PI;
+  label_metadata["label_pitch"] = pitch;
   let horizontal_scale = (2 * Math.PI) / image_width;
   let amplitude = (photographer_pitch * image_height) / 180;
   let original_x =
@@ -146,23 +181,53 @@ function calculate_coords(label_metadata) {
   ];
 }
 
+nextButton.addEventListener("click", function () {
+  do {
+    label_data_index += 1;
+  } while (!update());
+});
+
+prevButton.addEventListener("click", function () {
+  do {
+    label_data_index -= 1;
+  } while (!update());
+});
+
 function update() {
-  label_data_index += 1;
   new_data = label_data[label_data_index];
   // not sure how to check if street view can serve pano
   if (pano_ids.has(new_data.panorama_id)) {
     panoImage.src = `../panos/${new_data.panorama_id}.jpg`;
+    placedLabel.style.marginLeft = "0px";
+    placedLabel.style.marginTop = "0px";
+    const label_x_offset =
+      (parseFloat(new_data.calculated_x) / parseInt(new_data.width)) *
+      panoImage.width;
+    const label_y_offset =
+      (parseFloat(new_data.calculated_y) / parseInt(new_data.height)) *
+      panoImage.height;
+    calculatedLabel.style.marginLeft = label_x_offset + "px";
+    calculatedLabel.style.marginTop = label_y_offset + "px";
+    if (new_data.actual_x) {
+      placedLabel.style.marginLeft =
+        (parseFloat(new_data.actual_x) / new_data.width) * panoImage.width +
+        "px";
+      placedLabel.style.marginTop =
+        (parseFloat(new_data.actual_y) / new_data.height) * panoImage.height +
+        "px";
+    }
     panorama = new google.maps.StreetViewPanorama(
       document.getElementById("streetview"),
       {
         pov: {
-          heading: new_data.heading,
-          pitch: new_data.pitch,
+          heading: new_data.label_heading,
+          pitch: new_data.label_pitch,
         },
         pano: new_data.panorama_id,
       }
     );
+    return true;
   } else {
-    update();
+    return false;
   }
 }

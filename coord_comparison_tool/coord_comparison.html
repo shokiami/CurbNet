@@ -5,18 +5,43 @@
   </head>
   <body>
     <div id="pano-streetview-container">
-      <img id="pano" src="../confmap_pano.jpg" />
+      <img id="pano" style="opacity: 0.7" src="../confmap_pano.jpg" />
+      <div
+        id="calculatedLabel"
+        style="
+          background: #000000;
+          position: absolute;
+          margin-left: 100px;
+          margin-top: 100px;
+          width: 2px;
+          height: 2px;
+        "
+      ></div>
+      <div
+        id="placedLabel"
+        style="
+          background: #ff3b18;
+          position: absolute;
+          margin-left: 100px;
+          margin-top: 100px;
+          width: 2px;
+          height: 2px;
+        "
+      ></div>
       <div id="streetview"></div>
       <div id="overlay"></div>
     </div>
-    <form id="labelsForm">
-      <input type="file" id="labelsCSV" accept=".csv" />
-      <input type="submit" value="Submit" />
-    </form>
     <form id="panosForm">
       <input type="file" id="panosCSV" accept=".csv" />
-      <input type="submit" value="Submit" />
+      <input type="submit" value="Submit panos" />
     </form>
+    <form id="labelsForm">
+      <input type="file" id="labelsCSV" accept=".csv" />
+      <input type="submit" value="Submit labels" />
+    </form>
+    <button id="next">next</button><br />
+    <button id="prev">prev</button><br />
+    <button id="print">print</button>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script
       type="text/JavaScript"
