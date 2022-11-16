@@ -50,14 +50,13 @@ printButton.addEventListener("click", function (e) {
   result += "\n";
   for (const data of label_data) {
     if (data.actual_x && data.actual_y) {
-      console.log(data);
       for (const field in data) {
         result += `${data[field]},`;
       }
       result += "\n";
     }
   }
-  // console.log(result);
+  console.log(result);
 });
 
 panosForm.addEventListener("submit", function (e) {
