@@ -182,13 +182,29 @@ function calculate_coords(label_metadata) {
 
 nextButton.addEventListener("click", function () {
   do {
-    label_data_index += 1;
+    if (label_data_index < label_data.length - 1) {
+      label_data_index += 1;
+    } else {
+      console.log("finished");
+      while (!update()) {
+        label_data_index -= 1;
+      }
+      break;
+    }
   } while (!update());
 });
 
 prevButton.addEventListener("click", function () {
   do {
-    label_data_index -= 1;
+    if (label_data_index > 0) {
+      label_data_index -= 1;
+    } else {
+      console.log("at the beginning");
+      while (!update()) {
+        label_data_index += 1;
+      }
+      break;
+    }
   } while (!update());
 });
 
