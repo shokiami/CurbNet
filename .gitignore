@@ -1,7 +1,9 @@
 .DS_Store
 __pycache__
 sftp_key
-panos/*
+*.jpg
+*.png
 *.csv
+*.zip
 batches/*
 examples/*
