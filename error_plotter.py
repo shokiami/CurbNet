@@ -16,7 +16,7 @@ photographer_pitches = []
 pitches = []
 for _, row in errors_df.iterrows():
   label_row = labels_df[labels_df["label_id"] == row["label_id"]]
-  photographer_pitches.append(abs(label_row["photographer_pitch"].values[0]))
+  photographer_pitches.append(label_row["photographer_pitch"].values[0])
   pitches.append(label_row["pitch"].values[0])
 
 plt.figure(2)
